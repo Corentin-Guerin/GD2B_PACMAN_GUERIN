@@ -1,0 +1,366 @@
+<!doctype html> 
+<html lang="en"> 
+<head> 
+    <meta charset="UTF-8" />
+    <title>PacMan</title>
+    <script type = "text/javascript" src="phaser.min.js"></script> 
+    <style type="text/css">
+        body {
+            overflow: hidden;
+            margin:0 ;
+            padding: 0;
+        }
+    </style>
+</head>
+<body>
+
+<script type="text/javascript">
+
+var config = {
+    type: Phaser.AUTO,
+    width: 1280,
+    height: 720,
+    pixelArt: false,
+    backgroundColor: "#000000",
+    physics: {
+        default: 'arcade',
+        arcade: {
+            gravity: { y: 0 },
+            debug: false
+        }
+    },
+    input : {gamepad:true},
+    scene: {
+        preload: preload,
+        create: create,
+        update: update},
+        scale: {
+        zoom:1,
+    }
+
+};
+var game = new Phaser.Game(config);
+var paddle;
+var padConnected;    
+var wallsLayer;
+var onGround ;
+var cursor ;
+var cursor2 ;
+var coins ;
+var CoinObjects ;
+var coinAccount = 0 ;
+
+var enemieRouge ;
+var createEnemieRouge ;
+var enemieOrange ;
+var createEnemieOrange ;
+
+
+var gameOver;
+var directionbody = false ;
+
+
+    
+
+function death()
+{
+    return ;
+}
+
+
+
+function preload ()
+{   
+    this.load.spritesheet('Perso', 'assets/Pacman.png', { frameWidth:16, frameHeight:16,});
+    this.load.spritesheet('Rouge', 'assets/Rouge.png', { frameWidth:16, frameHeight:16,});
+    this.load.spritesheet('Orange', 'assets/Orange.png', { frameWidth:16, frameHeight:16,});
+    this.load.spritesheet('Coins', 'assets/coin.png', { frameWidth:16, frameHeight: 16,});
+ 
+
+    this.load.image('tiles','assets/maze.png');
+    this.load.tilemapTiledJSON('map','assets/MapPacMan.json');
+
+}
+
+
+function create ()
+{   
+    
+    const map = this.make.tilemap({key : 'map'});
+    const tileset = map.addTilesetImage('Map','tiles');
+    
+  
+    wallsLayer = map.createDynamicLayer('Mur',tileset);
+    wallsLayer.setCollisionByExclusion(-1,true) ;
+
+    player = this.physics.add.sprite(340, 435, 'Perso')
+      .setDrag(1000, 0)
+      .setMaxVelocity(300)
+      .setSize(24, 24)
+    
+    player.setBounce(0);
+    player.setCollideWorldBounds(false);
+    
+    
+    this.cameras.main.startFollow(player);
+    this.cameras.main.setBounds(0, 0, player.widthInPixels, player.heightInPixels);
+  
+    //animation perso principal  //////////////////////////
+    this.anims.create({
+        key: 'fixe',
+        frames: this.anims.generateFrameNumbers('Perso', { start: 0, end: 0 }),
+        frameRate: 5,
+    });
+
+    this.anims.create({
+        key: 'run',
+        frames: this.anims.generateFrameNumbers('Perso', { start: 0, end: 2}),
+        frameRate: 12,
+        
+    });
+
+
+    /////////coin//////
+    CoinObjects = map.getObjectLayer('Coins').objects;
+    coins = this.physics.add.group(); 
+
+    for (const coin of CoinObjects) {
+    //enemies.create(enemie.x, enemie.y, 'Enemie1')
+    coins.create(coin.x, coin.y, 'Coins')
+        .setDepth(1)
+        .setScale(1)
+    }
+
+    //////////////Enemie 
+    //Rouge
+
+    createEnemieRouge = map.getObjectLayer('EnemieRouge').objects;
+    enemiesRouge = this.physics.add.group(); 
+
+    for (const enemieRouge of createEnemieRouge) {
+    //enemies.create(enemie.x, enemie.y, 'Enemie1')
+    enemiesRouge.create(enemieRouge.x, enemieRouge.y, 'Rouge')
+        .setOrigin(1,1)
+        .setDepth(1)
+        .setScale(1)
+    }
+    for (const enemieRouge of enemiesRouge.children.entries) {
+        enemieRouge.direction = 'UP';
+        enemieRouge.isDed = false;
+    }
+    //Orange
+
+    createEnemieOrange = map.getObjectLayer('EnemieOrange').objects;
+    enemiesOrange = this.physics.add.group(); 
+
+    for (const enemieOrange of createEnemieOrange) {
+    //enemies.create(enemie.x, enemie.y, 'Enemie1')
+    enemiesOrange.create(enemieOrange.x, enemieOrange.y, 'Orange')
+        .setOrigin(1,1)
+        .setDepth(1)
+        .setScale(1)
+    }
+    for (const enemieOrange of enemiesOrange.children.entries) {
+        enemieOrange.direction = 'UP';
+        enemieOrange.isDed = false;
+    }
+
+    
+
+
+ 
+    ////////collider/////////////////
+    this.physics.add.collider(player, wallsLayer);
+    this.physics.add.collider(enemiesRouge, wallsLayer);
+    this.physics.add.collider(enemiesOrange, wallsLayer);
+    this.physics.world.addCollider(player, coins,Getcoins, null, this);
+    this.physics.world.addCollider(player, enemiesRouge,Loose, null, this);
+    this.physics.world.addCollider(enemiesOrange, player,Loose, null, this);
+    this.physics.world.addCollider(player, enemiesOrange,Loose, null, this);
+    this.physics.world.addCollider(enemiesOrange, player,Loose, null, this);
+
+
+    ////////// Inputs ////////////////
+
+    cursors = this.input.keyboard.createCursorKeys();
+    cursors2 = this.input.keyboard.addKeys('A,Z,S,Q,D,T,space');
+    
+}
+/////////////////////////////////////////////////////////////////////////////////
+  
+
+
+function update (time, delta)
+{
+      player.update();
+
+    this.input.gamepad.once('connected', function (pad) {
+    //   'pad' is a reference to the gamepad that was just connected
+        paddle = pad;
+        padConnected = true;
+    });
+
+    const speed = 150 ;
+    if (cursors2.Q.isDown || cursors.left.isDown) {
+        player.setVelocityX(-speed);
+        player.setFlipX(true);
+        directionbody = true;
+    } 
+    else if (cursors2.D.isDown || cursors.right.isDown) {
+      player.setVelocityX(speed);
+      player.setFlipX(false);
+      directionbody = false;
+
+    } 
+    else if (cursors2.Z.isDown || cursors.up.isDown) {
+        player.setVelocityY(-speed);
+        player.setFlipY(true);
+        directionbody = true;
+    } 
+    else if (cursors2.S.isDown || cursors.down.isDown) {
+      player.setVelocityY(speed);
+      player.setFlipY(false);
+      directionbody = false;
+    }
+    else {
+      player.setVelocityX(0);
+      player.setVelocityY(0);
+    }
+    
+   if(padConnected){
+       
+        if (paddle.left)
+        {
+            player.setVelocityX(-speed);
+            player.setFlipX(true);
+            directionbody = true;
+        }
+        else if (paddle.right)
+        {
+            player.setVelocityX(speed);
+            player.setFlipX(false);
+            directionbody = false;
+        }
+        else if (paddle.up)
+        {
+            player.setVelocityY(-speed);
+            player.setFlipY(true);
+            directionbody = true;
+        }
+        else if (paddle.down)
+        {
+            player.setVelocityY(speed);
+            player.setFlipY(false);
+            directionbody = false;
+        }
+        else
+        {
+            player.setVelocityY(0);
+            player.setVelocityX(0);
+        }
+   }
+
+   
+   if (coinAccount == 124)
+    {
+        this.add.text(155, 200, "You win", { font: "18px monospace",fill: "#000000",padding: { x: 50, y: 25 },backgroundColor: "#ffffff"})
+        .setDepth(1)
+        .setScrollFactor(0);
+
+
+        this.physics.pause();
+        gameOver = true ;
+    }
+    for (const enemieRouge of enemiesRouge.children.entries) {
+    
+        if (enemieRouge.body.blocked.up) {
+            enemieRouge.direction = 'LEFT';
+        }
+        if (enemieRouge.body.blocked.left) {
+                enemieRouge.direction = 'DOWN';
+        }
+        if (enemieRouge.body.blocked.down) {
+                enemieRouge.direction = 'RIGHT';
+        }
+        if (enemieRouge.body.blocked.right) {
+                enemieRouge.direction = 'UP';
+        }
+
+        if (enemieRouge.direction === 'RIGHT') {
+                enemieRouge.setVelocityY(0);
+                enemieRouge.setVelocityX(100);
+        } 
+        if (enemieRouge.direction === 'LEFT') {
+                enemieRouge.setVelocityY(0);
+                enemieRouge.setVelocityX(-100);    
+        } 
+        if (enemieRouge.direction === 'UP') {
+                enemieRouge.setVelocityY(-100);
+                enemieRouge.setVelocityX(0);   
+        } 
+        if (enemieRouge.direction === 'DOWN') {
+                enemieRouge.setVelocityY(100);
+                enemieRouge.setVelocityX(0);   
+        } 
+    }
+
+    for (const enemieOrange of enemiesOrange.children.entries) {
+    
+    if (enemieOrange.body.blocked.up) {
+        enemieOrange.direction = 'RIGHT';
+    }
+    if (enemieOrange.body.blocked.left) {
+        enemieOrange.direction = 'UP';
+    }
+    if (enemieOrange.body.blocked.down) {
+        enemieOrange.direction = 'LEFT';
+    }
+    if (enemieOrange.body.blocked.right) {
+        enemieOrange.direction = 'DOWN';
+    }
+
+    if (enemieOrange.direction === 'RIGHT') {
+        enemieOrange.setVelocityY(0);
+        enemieOrange.setVelocityX(100);
+    } 
+    if (enemieOrange.direction === 'LEFT') {
+        enemieOrange.setVelocityY(0);
+        enemieOrange.setVelocityX(-100);    
+    } 
+    if (enemieOrange.direction === 'UP') {
+        enemieOrange.setVelocityY(-100);
+        enemieOrange.setVelocityX(0);   
+    } 
+    if (enemieOrange.direction === 'DOWN') {
+        enemieOrange.setVelocityY(100);
+        enemieOrange.setVelocityX(0);   
+    } 
+}
+       
+    
+
+}
+
+function Getcoins(Player,coin)
+{
+    coin.destroy();
+    coinAccount++ ;
+}
+function Loose(Player,Enemie)
+{
+    this.add.text(155, 200, "You Loose", { font: "18px monospace",fill: "#000000",padding: { x: 50, y: 25 },backgroundColor: "#ffffff"})
+    .setDepth(1)
+    .setScrollFactor(0);
+
+
+    this.physics.pause();
+    gameOver = true ;
+    
+}
+
+
+
+</script>
+
+</body>
+</html>
